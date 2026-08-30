@@ -88,7 +88,7 @@ CATEGORIES = {
         "label": "Coding Agents & Dev Tools",
         "queries": [
             "topic:ai-coding-assistant", "topic:coding-agent", "topic:code-generation",
-            "topic:developer-tools+topic:llm", "topic:ai-code-review",
+            "topic:developer-tools topic:llm", "topic:ai-code-review",
         ],
         "curated": [
             "anthropics/claude-code", "continuedev/continue", "sweepai/sweep",
@@ -99,7 +99,7 @@ CATEGORIES = {
         "label": "Multi-Agent Simulation & Research",
         "queries": [
             "topic:multi-agent-systems", "topic:generative-agents",
-            "topic:reinforcement-learning+topic:agents", "topic:agent-simulation",
+            "topic:reinforcement-learning topic:agents", "topic:agent-simulation",
         ],
         "curated": [
             "joonspk-research/generative_agents", "camel-ai/camel", "OpenBMB/AgentVerse",
@@ -111,7 +111,7 @@ CATEGORIES = {
 
 
 def gh_api(path, params=None, retries=4):
-    args = ["gh", "api", path]
+    args = ["gh", "api", "--method", "GET", path]
     if params:
         for k, v in params.items():
             args += ["-f", f"{k}={v}"]
