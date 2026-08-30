@@ -61,7 +61,10 @@ crowd before you depend on something.
   scale.
 - **Interaction**: scroll/pinch to zoom (labels fade in as you get close), drag to pan, click
   a node for a detail panel with its top connections, click a legend category to isolate it,
-  `/` to search, `Esc` to close/clear.
+  `/` to search then `Enter` to jump to a match (or fit all matches in view), `Esc` to close/clear.
+- **Shareable links**: opening any project updates the URL (`?node=owner/repo`) via
+  `history.replaceState` — copy the address bar or hit "Copy link" in the detail panel to send
+  someone straight to that project, pre-selected and pre-zoomed, tour skipped.
 - **Onboarding**: a short 4-step tour on first visit, replayable via the `?` button.
 - **No build step** — a static `docs/index.html` + `docs/data.json`, styled with Tailwind
   (CDN) and rendered with D3, hosted directly from GitHub Pages.

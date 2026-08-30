@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+
+Sitemap: https://shaileshjaiswalwins.github.io/map-of-agents-graph/sitemap.xml

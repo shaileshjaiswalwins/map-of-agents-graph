@@ -5,6 +5,15 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <title>Map of Agents — a connected view of the AI agent ecosystem</title>
 <meta name="description" content="A force-directed map of the AI agent ecosystem: hundreds of real projects connected by shared topics and organizations, live from GitHub." />
+<meta property="og:type" content="website" />
+<meta property="og:title" content="Map of Agents — a connected view of the AI agent ecosystem" />
+<meta property="og:description" content="2,040 real AI-agent projects from GitHub, connected by shared topics and orgs into a live force-directed map. Find your project, spot momentum, check maintenance health." />
+<meta property="og:image" content="https://shaileshjaiswalwins.github.io/map-of-agents-graph/assets/og-preview.jpg" />
+<meta property="og:url" content="https://shaileshjaiswalwins.github.io/map-of-agents-graph/" />
+<meta name="twitter:card" content="summary_large_image" />
+<meta name="twitter:title" content="Map of Agents — a connected view of the AI agent ecosystem" />
+<meta name="twitter:description" content="2,040 real AI-agent projects from GitHub, connected by shared topics and orgs into a live force-directed map." />
+<meta name="twitter:image" content="https://shaileshjaiswalwins.github.io/map-of-agents-graph/assets/og-preview.jpg" />
 <script src="https://cdnjs.cloudflare.com/ajax/libs/tailwindcss/3.4.1/tailwind.min.js" onerror="this.onerror=null;var s=document.createElement('script');s.src='https://cdn.tailwindcss.com';document.head.appendChild(s);"></script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -238,6 +247,8 @@ let activeCats = new Set(CATEGORY_ORDER);
 let lens = localStorage.getItem("moag_lens") || "category";
 let searchTerm = "";
 let dpr = Math.max(window.devicePixelRatio || 1, 1);
+let zoomBehavior = null;
+let pendingFocusId = null;
 
 const canvas = document.getElementById("canvas");
 const ctx = canvas.getContext("2d");
@@ -291,7 +302,16 @@ fetch("data.json").then(r=>r.json()).then(d=>{
   requestAnimationFrame(tick);
 
   setTimeout(()=>{ document.getElementById("loading").classList.add("hide"); }, 400);
-  if (!localStorage.getItem("moag_onboarded")) setTimeout(startTour, 700);
+
+  const sharedFull = new URLSearchParams(location.search).get("node");
+  const sharedNode = sharedFull ? nodes.find(n => n.full_name.toLowerCase() === sharedFull.toLowerCase()) : null;
+  if (sharedNode){
+    pendingFocusId = sharedNode.id;
+    openDetail(sharedNode, {skipUrlUpdate: true});
+    showSharedBanner(sharedNode);
+  } else if (!localStorage.getItem("moag_onboarded")){
+    setTimeout(startTour, 700);
+  }
 });
 
 function countUp(id, target, fmt){
@@ -317,17 +337,73 @@ function startSimulation(){
     .force("x", d3.forceX(window.innerWidth/2).strength(0.015))
     .force("y", d3.forceY(window.innerHeight/2).strength(0.015))
     .alpha(1).alphaDecay(0.018)
-    .on("tick", markDirty);
+    .on("tick", ()=>{ markDirty(); if (pendingFocusId != null) followFocusNode(); });
 }
 
 // ---------- zoom/pan ----------
 function setupZoom(){
-  const zoom = d3.zoom()
+  zoomBehavior = d3.zoom()
     .scaleExtent([0.1, 8])
-    .on("start", ()=>canvas.classList.add("grabbing"))
+    .on("start", (ev)=>{ canvas.classList.add("grabbing"); if (ev.sourceEvent) pendingFocusId = null; })
     .on("end", ()=>canvas.classList.remove("grabbing"))
-    .on("zoom", (ev)=>{ transform = ev.transform; hideHint(); markDirty(); });
-  d3.select(canvas).call(zoom).on("dblclick.zoom", null);
+    .on("zoom", (ev)=>{ transform = ev.transform; if (ev.sourceEvent) hideHint(); markDirty(); });
+  d3.select(canvas).call(zoomBehavior).on("dblclick.zoom", null);
+}
+
+// Keeps the camera centered on a node while the force simulation is still
+// settling it into place (used when hydrating a shared ?node= link, where
+// the node's position is unknown until the sim has run a few ticks).
+function followFocusNode(){
+  const n = nodeById.get(pendingFocusId);
+  if (!n){ pendingFocusId = null; return; }
+  const k = Math.max(transform.k, 2);
+  const target = d3.zoomIdentity
+    .translate(window.innerWidth/2 - n.x*k, window.innerHeight/2 - n.y*k)
+    .scale(k);
+  if (simulation.alpha() < 0.05){
+    d3.select(canvas).transition().duration(500).call(zoomBehavior.transform, target);
+    pendingFocusId = null;
+  } else {
+    zoomBehavior.transform(d3.select(canvas), target);
+  }
+}
+
+function focusAndOpen(n){
+  const k = Math.max(transform.k, 2.2);
+  const target = d3.zoomIdentity
+    .translate(window.innerWidth/2 - n.x*k, window.innerHeight/2 - n.y*k)
+    .scale(k);
+  d3.select(canvas).transition().duration(600).call(zoomBehavior.transform, target);
+  openDetail(n);
+}
+
+function fitToNodes(list){
+  const pad = 90, w = window.innerWidth, h = window.innerHeight;
+  const xs = list.map(n=>n.x), ys = list.map(n=>n.y);
+  const minX = Math.min(...xs), maxX = Math.max(...xs);
+  const minY = Math.min(...ys), maxY = Math.max(...ys);
+  const bboxW = Math.max(maxX-minX, 40), bboxH = Math.max(maxY-minY, 40);
+  const k = Math.min(8, Math.max(0.3, Math.min((w-pad*2)/bboxW, (h-pad*2)/bboxH)));
+  const cx = (minX+maxX)/2, cy = (minY+maxY)/2;
+  const target = d3.zoomIdentity.translate(w/2 - cx*k, h/2 - cy*k).scale(k);
+  d3.select(canvas).transition().duration(600).call(zoomBehavior.transform, target);
+}
+
+function navigateToSearchMatches(){
+  if (!searchTerm) return;
+  const matches = nodes.filter(n => activeCats.has(n.category) &&
+    (n.name.toLowerCase().includes(searchTerm) || n.full_name.toLowerCase().includes(searchTerm)));
+  if (!matches.length) return;
+  pendingFocusId = null;
+  if (matches.length === 1) focusAndOpen(matches[0]);
+  else fitToNodes(matches);
+}
+
+function showSharedBanner(n){
+  const hint = document.getElementById("hint");
+  hint.innerHTML = `<span>🔗 Shared view — showing <b style="color:var(--text)">${escapeHtml(n.name)}</b></span>`;
+  hint.classList.remove("hidden");
+  setTimeout(()=>{ hint.classList.add("hidden"); }, 6000);
 }
 
 function hideHint(){
@@ -440,6 +516,19 @@ function setupInteraction(){
 
   const search = document.getElementById("search");
   search.addEventListener("input", ()=>{ searchTerm = search.value.trim().toLowerCase(); markDirty(); });
+  search.addEventListener("keydown", (ev)=>{
+    if (ev.key === "Enter"){ ev.preventDefault(); navigateToSearchMatches(); }
+  });
+
+  document.getElementById("detailBody").addEventListener("click", (ev)=>{
+    if (ev.target.id === "copyLinkBtn"){
+      const btn = ev.target;
+      navigator.clipboard?.writeText(location.href).then(()=>{
+        btn.textContent = "✓ Copied!";
+        setTimeout(()=>{ btn.textContent = "🔗 Copy link"; }, 1500);
+      });
+    }
+  });
 
   window.addEventListener("keydown", (ev)=>{
     if (ev.key === "/" && document.activeElement !== search){
@@ -469,8 +558,16 @@ function escapeHtml(s){
 }
 
 // ---------- detail panel ----------
-function openDetail(n){
+function updateUrl(n){
+  const url = new URL(location.href);
+  if (n) url.searchParams.set("node", n.full_name);
+  else url.searchParams.delete("node");
+  history.replaceState(null, "", url.pathname + url.search);
+}
+
+function openDetail(n, opts){
   selectedNode = n;
+  if (!opts || !opts.skipUrlUpdate) updateUrl(n);
   const badge = `<span class="badge" style="background:${nodeColor(n)}22;color:${nodeColor(n)}">${n.category_label}</span>`;
   const maint = `<span class="badge" style="background:${maintColor[n.maintenance]}22;color:${maintColor[n.maintenance]}">${n.maintenance}</span>`;
   const warn = n.suspicious ? `<div style="background:#f8717122; border:1px solid #f8717155; border-radius:10px; padding:10px 12px; font-size:12px; line-height:1.5; color:#fca5a5; margin-bottom:16px;">
@@ -501,12 +598,16 @@ function openDetail(n){
     </div>
     <div style="font-size:11.5px; color:var(--muted); margin-bottom:6px;">CONNECTED TO</div>
     <div class="conns">${linked || "No strong connections found."}</div>
-    <a class="gh" href="${n.url}" target="_blank" rel="noopener">View on GitHub →</a>
+    <div style="display:flex; gap:8px; margin-top:16px;">
+      <button id="copyLinkBtn" style="flex:1; padding:10px; border-radius:10px; background:#ffffff10; border:1px solid var(--border); color:var(--text); font-size:12.5px; font-weight:500; cursor:pointer; transition:background .15s;">🔗 Copy link</button>
+      <a class="gh" style="flex:1; margin-top:0;" href="${n.url}" target="_blank" rel="noopener">View on GitHub →</a>
+    </div>
   `;
   document.getElementById("detail").classList.add("open");
 }
 function closeDetail(){
   selectedNode = null;
+  updateUrl(null);
   document.getElementById("detail").classList.remove("open");
 }
 
