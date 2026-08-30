@@ -3,6 +3,7 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='20' fill='%2308090c'/%3E%3Ccircle cx='32' cy='36' r='11' fill='%2322d3ee'/%3E%3Ccircle cx='70' cy='28' r='8' fill='%23a78bfa'/%3E%3Ccircle cx='68' cy='68' r='13' fill='%23f472b6'/%3E%3Ccircle cx='30' cy='72' r='7' fill='%234ade80'/%3E%3Cline x1='32' y1='36' x2='70' y2='28' stroke='%23ffffff55' stroke-width='2'/%3E%3Cline x1='32' y1='36' x2='68' y2='68' stroke='%23ffffff55' stroke-width='2'/%3E%3Cline x1='32' y1='36' x2='30' y2='72' stroke='%23ffffff55' stroke-width='2'/%3E%3Cline x1='68' y1='68' x2='70' y2='28' stroke='%23ffffff33' stroke-width='2'/%3E%3C/svg%3E" />
 <title>Map of Agents — a connected view of the AI agent ecosystem</title>
 <meta name="description" content="A force-directed map of the AI agent ecosystem: hundreds of real projects connected by shared topics and organizations, live from GitHub." />
 <meta property="og:type" content="website" />
@@ -71,16 +72,37 @@
 
   #legend{
     position:fixed; left:16px; bottom:16px; z-index:20; border-radius:16px;
-    padding:12px 14px; font-size:12px; max-width:230px;
+    padding:12px 14px; font-size:12px; max-width:230px; max-height:calc(100vh - 32px); overflow-y:auto;
   }
-  #legend .row{display:flex; align-items:center; gap:8px; padding:3px 0; cursor:pointer; border-radius:6px; transition:opacity .15s;}
+  #legend .row{display:flex; align-items:center; gap:8px; padding:3px 0; border-radius:6px; transition:opacity .15s;}
   #legend .row:hover{opacity:.85;}
   #legend .row.dim{opacity:.35;}
-  #legend .dot{width:9px; height:9px; border-radius:50%; flex:none;}
-  #legend .label{color:var(--text); font-weight:500;}
+  #legend .dot{width:9px; height:9px; border-radius:50%; flex:none; cursor:pointer;}
+  #legend .label{color:var(--text); font-weight:500; cursor:pointer; flex:1;}
   #legend .count{color:var(--muted); margin-left:auto; font-variant-numeric:tabular-nums; font-size:11px;}
+  #legend .section-title{font-size:10px; color:var(--muted); text-transform:uppercase; letter-spacing:.05em; margin:10px 0 5px; padding-top:8px; border-top:1px solid var(--border);}
+  #legend .section-title:first-child{margin-top:0; padding-top:0; border-top:none;}
+  #legend .chip{
+    display:inline-flex; align-items:center; padding:3px 9px; border-radius:999px; font-size:11px;
+    cursor:pointer; margin:0 4px 4px 0; border:1px solid var(--border); color:var(--muted); transition:all .15s;
+  }
+  #legend .chip.active{color:#000; font-weight:600;}
+  #legend .chip.dim{opacity:.4;}
+  #legendClose{display:none;}
+
+  #legendToggle{
+    display:none; position:fixed; left:16px; bottom:16px; z-index:21; width:44px; height:44px;
+    border-radius:50%; align-items:center; justify-content:center; font-size:17px; cursor:pointer;
+  }
 
   #lensBar{position:fixed; right:16px; bottom:16px; z-index:20; border-radius:14px; padding:8px; display:flex; gap:2px;}
+  #resetView{
+    position:fixed; right:16px; bottom:66px; z-index:20; width:36px; height:36px; border-radius:50%;
+    display:flex; align-items:center; justify-content:center; font-size:15px; cursor:pointer;
+    color:var(--muted); transition:all .15s; opacity:0; pointer-events:none; transform:scale(.8);
+  }
+  #resetView.show{opacity:1; pointer-events:all; transform:scale(1);}
+  #resetView:hover{color:var(--text); background:#ffffff0d;}
 
   #hint{
     position:fixed; left:50%; bottom:16px; transform:translateX(-50%); z-index:15;
@@ -107,6 +129,9 @@
   #detail .badge{display:inline-block; font-size:11px; padding:3px 9px; border-radius:999px; font-weight:600; margin-right:6px;}
   #detail .conns{font-size:11.5px; color:var(--muted); margin-top:4px; line-height:1.9;}
   #detail .conns b{color:var(--text); font-weight:500;}
+  #detail .conn-row{border-radius:6px; padding:2px 6px; margin:0 -6px; transition:background .12s;}
+  #detail .conn-row:hover{background:#ffffff0d;}
+  #detail .conn-row:hover b{color:var(--accent);}
   #detail a.gh{
     display:block; text-align:center; margin-top:16px; padding:10px; border-radius:10px;
     background:var(--accent); color:#000; font-weight:600; font-size:13px; text-decoration:none;
@@ -167,10 +192,34 @@
   }
   #replayTour:hover{color:var(--text); background:#ffffff0d;}
 
+  #loadError{
+    position:fixed; inset:0; z-index:55; display:none; flex-direction:column; align-items:center;
+    justify-content:center; gap:14px; background:var(--bg); padding:24px; text-align:center;
+  }
+  #loadError.show{display:flex;}
+  #loadError p{color:var(--muted); font-size:13px; max-width:320px; line-height:1.6;}
+  #loadError button{
+    background:var(--accent); color:#000; font-weight:600; font-size:13px; padding:9px 20px;
+    border-radius:999px; border:none; cursor:pointer;
+  }
+
   @media (max-width:720px){
-    #legend{display:none;}
     header#hdr{flex-wrap:wrap;}
     #detail{width:100%;}
+    #legendToggle{display:flex;}
+    #legend{
+      left:0; right:0; bottom:0; max-width:none; border-radius:20px 20px 0 0;
+      transform:translateY(100%); transition:transform .3s cubic-bezier(.22,1,.36,1);
+      padding:16px 16px calc(16px + env(safe-area-inset-bottom));
+    }
+    #legend.open{transform:translateY(0);}
+    #legendClose{
+      display:block; position:absolute; top:12px; right:14px; width:26px; height:26px; border-radius:50%;
+      background:#ffffff10; text-align:center; line-height:26px; cursor:pointer; color:var(--muted);
+    }
+    #hint{bottom:calc(16px + env(safe-area-inset-bottom));}
+    #lensBar{bottom:calc(16px + env(safe-area-inset-bottom));}
+    #resetView{bottom:calc(66px + env(safe-area-inset-bottom));}
   }
 </style>
 </head>
@@ -196,8 +245,10 @@
 
 <div id="replayTour" class="glass">?</div>
 
+<div id="legendToggle" class="glass">☰</div>
 <div id="legend" class="glass"></div>
 
+<div id="resetView" class="glass" title="Reset view">⌂</div>
 <div id="lensBar" class="glass"></div>
 
 <div id="hint" class="glass">
@@ -216,6 +267,12 @@
 <div id="loading">
   <div class="spinner"></div>
   <div class="msg" id="loadingMsg">Loading live GitHub data…</div>
+</div>
+
+<div id="loadError">
+  <div style="font-size:28px;">⚠</div>
+  <p>Couldn't load the project data. This is usually a network hiccup — check your connection and try again.</p>
+  <button id="retryLoad">Retry</button>
 </div>
 
 <div id="onboard">
@@ -239,16 +296,26 @@ function tractionColor(t){
   return d3.interpolateRgb("#374151", "#22d3ee")(s(Math.max(t,0.01)));
 }
 
+const MAINT_ORDER = ["active","moderate","stale","archived","unknown"];
+const MAINT_LABEL = {active:"Active", moderate:"Moderate", stale:"Stale", archived:"Archived", unknown:"Unknown"};
+
 let DATA = null, nodes = [], edges = [], nodeById = new Map();
 let simulation = null;
 let transform = d3.zoomIdentity;
 let hoverNode = null, selectedNode = null;
 let activeCats = new Set(CATEGORY_ORDER);
+let activeMaint = new Set(MAINT_ORDER);
+let suspiciousOnly = false;
 let lens = localStorage.getItem("moag_lens") || "category";
 let searchTerm = "";
 let dpr = Math.max(window.devicePixelRatio || 1, 1);
 let zoomBehavior = null;
 let pendingFocusId = null;
+
+function catLabel(n){ return DATA.meta.category_labels[n.category]; }
+function filtersActive(){
+  return activeCats.size < CATEGORY_ORDER.length || activeMaint.size < MAINT_ORDER.length || suspiciousOnly || !!searchTerm;
+}
 
 const canvas = document.getElementById("canvas");
 const ctx = canvas.getContext("2d");
@@ -273,46 +340,63 @@ function nodeColor(n){
 
 function nodeVisible(n){
   if (!activeCats.has(n.category)) return false;
+  if (!activeMaint.has(n.maintenance)) return false;
+  if (suspiciousOnly && !n.suspicious) return false;
   if (searchTerm && !(n.name.toLowerCase().includes(searchTerm) || n.full_name.toLowerCase().includes(searchTerm))) return false;
   return true;
 }
 
 // ---------- data load ----------
-fetch("data.json").then(r=>r.json()).then(d=>{
-  DATA = d;
-  nodes = d.nodes.map(n => Object.assign({}, n, {
-    x: window.innerWidth/2 + (Math.random()-0.5)*400,
-    y: window.innerHeight/2 + (Math.random()-0.5)*400,
-  }));
-  nodeById = new Map(nodes.map(n=>[n.id,n]));
-  edges = d.edges.map(e => Object.assign({}, e, {source: nodeById.get(e.source), target: nodeById.get(e.target)}));
+function loadData(){
+  document.getElementById("loadError").classList.remove("show");
+  document.getElementById("loading").classList.remove("hide");
+  document.getElementById("loadingMsg").textContent = "Loading live GitHub data…";
+  fetch("data.json").then(r=>{
+    if (!r.ok) throw new Error("HTTP "+r.status);
+    return r.json();
+  }).then(d=>{
+    DATA = d;
+    nodes = d.nodes.map(n => Object.assign({}, n, {
+      x: window.innerWidth/2 + (Math.random()-0.5)*400,
+      y: window.innerHeight/2 + (Math.random()-0.5)*400,
+    }));
+    nodeById = new Map(nodes.map(n=>[n.id,n]));
+    // edges ship as compact [source, target, weight, reason] tuples to save payload size
+    edges = d.edges.map(e => ({source: nodeById.get(e[0]), target: nodeById.get(e[1]), weight: e[2], reason: e[3]}));
 
-  document.getElementById("loadingMsg").textContent = "Laying out "+nodes.length+" projects…";
-  countUp("statNodes", d.meta.total_projects);
-  countUp("statEdges", d.meta.total_edges);
-  countUp("statStars", d.meta.total_stars, v => v>=1000?(v/1000).toFixed(1)+"k":v);
+    document.getElementById("loadingMsg").textContent = "Laying out "+nodes.length+" projects…";
+    countUp("statNodes", d.meta.total_projects);
+    countUp("statEdges", d.meta.total_edges);
+    countUp("statStars", d.meta.total_stars, v => v>=1000?(v/1000).toFixed(1)+"k":v);
 
-  buildLegend();
-  buildLensBar();
+    buildLegend();
+    buildLensBar();
 
-  resize();
-  startSimulation();
-  setupZoom();
-  setupInteraction();
-  requestAnimationFrame(tick);
+    resize();
+    startSimulation();
+    setupZoom();
+    setupInteraction();
+    requestAnimationFrame(tick);
 
-  setTimeout(()=>{ document.getElementById("loading").classList.add("hide"); }, 400);
+    setTimeout(()=>{ document.getElementById("loading").classList.add("hide"); }, 400);
 
-  const sharedFull = new URLSearchParams(location.search).get("node");
-  const sharedNode = sharedFull ? nodes.find(n => n.full_name.toLowerCase() === sharedFull.toLowerCase()) : null;
-  if (sharedNode){
-    pendingFocusId = sharedNode.id;
-    openDetail(sharedNode, {skipUrlUpdate: true});
-    showSharedBanner(sharedNode);
-  } else if (!localStorage.getItem("moag_onboarded")){
-    setTimeout(startTour, 700);
-  }
-});
+    const sharedFull = new URLSearchParams(location.search).get("node");
+    const sharedNode = sharedFull ? nodes.find(n => n.full_name.toLowerCase() === sharedFull.toLowerCase()) : null;
+    if (sharedNode){
+      pendingFocusId = sharedNode.id;
+      openDetail(sharedNode, {skipUrlUpdate: true});
+      showSharedBanner(sharedNode);
+    } else if (!localStorage.getItem("moag_onboarded")){
+      setTimeout(startTour, 700);
+    }
+  }).catch(err=>{
+    document.getElementById("loading").classList.add("hide");
+    document.getElementById("loadError").classList.add("show");
+    console.error("Map of Agents: failed to load data.json", err);
+  });
+}
+loadData();
+document.getElementById("retryLoad").addEventListener("click", loadData);
 
 function countUp(id, target, fmt){
   const el = document.getElementById(id);
@@ -346,7 +430,13 @@ function setupZoom(){
     .scaleExtent([0.1, 8])
     .on("start", (ev)=>{ canvas.classList.add("grabbing"); if (ev.sourceEvent) pendingFocusId = null; })
     .on("end", ()=>canvas.classList.remove("grabbing"))
-    .on("zoom", (ev)=>{ transform = ev.transform; if (ev.sourceEvent) hideHint(); markDirty(); });
+    .on("zoom", (ev)=>{
+      transform = ev.transform;
+      if (ev.sourceEvent) hideHint();
+      markDirty();
+      const rv = document.getElementById("resetView");
+      if (rv) rv.classList.toggle("show", filtersActive() || transform.k !== 1 || transform.x !== 0 || transform.y !== 0);
+    });
   d3.select(canvas).call(zoomBehavior).on("dblclick.zoom", null);
 }
 
@@ -391,8 +481,7 @@ function fitToNodes(list){
 
 function navigateToSearchMatches(){
   if (!searchTerm) return;
-  const matches = nodes.filter(n => activeCats.has(n.category) &&
-    (n.name.toLowerCase().includes(searchTerm) || n.full_name.toLowerCase().includes(searchTerm)));
+  const matches = nodes.filter(nodeVisible);
   if (!matches.length) return;
   pendingFocusId = null;
   if (matches.length === 1) focusAndOpen(matches[0]);
@@ -427,7 +516,7 @@ function render(){
   ctx.scale(transform.k, transform.k);
 
   const showLabels = transform.k > 1.4;
-  const anyFilter = activeCats.size < CATEGORY_ORDER.length || searchTerm;
+  const anyFilter = filtersActive();
 
   // edges
   ctx.lineWidth = 1/transform.k;
@@ -515,7 +604,11 @@ function setupInteraction(){
   document.getElementById("replayTour").addEventListener("click", startTour);
 
   const search = document.getElementById("search");
-  search.addEventListener("input", ()=>{ searchTerm = search.value.trim().toLowerCase(); markDirty(); });
+  search.addEventListener("input", ()=>{
+    searchTerm = search.value.trim().toLowerCase();
+    markDirty();
+    document.getElementById("resetView").classList.toggle("show", filtersActive() || transform.k !== 1 || transform.x !== 0 || transform.y !== 0);
+  });
   search.addEventListener("keydown", (ev)=>{
     if (ev.key === "Enter"){ ev.preventDefault(); navigateToSearchMatches(); }
   });
@@ -527,8 +620,17 @@ function setupInteraction(){
         btn.textContent = "✓ Copied!";
         setTimeout(()=>{ btn.textContent = "🔗 Copy link"; }, 1500);
       });
+      return;
+    }
+    const row = ev.target.closest(".conn-row");
+    if (row){
+      const other = nodeById.get(Number(row.dataset.id));
+      if (other) focusAndOpen(other);
     }
   });
+
+  document.getElementById("resetView").addEventListener("click", resetView);
+  document.getElementById("legendToggle").addEventListener("click", ()=>document.getElementById("legend").classList.add("open"));
 
   window.addEventListener("keydown", (ev)=>{
     if (ev.key === "/" && document.activeElement !== search){
@@ -545,8 +647,11 @@ function setupInteraction(){
 function positionTooltip(px, py, n){
   const tip = document.getElementById("tooltip");
   if (!n){ hideTooltip(); return; }
+  const lensLine = lens === "maintenance" ? MAINT_LABEL[n.maintenance] || n.maintenance
+    : lens === "traction" ? `${n.traction} ★/day`
+    : catLabel(n);
   tip.innerHTML = `<div class="n">${escapeHtml(n.name)}${n.suspicious ? ' <span style="color:#f87171">⚠</span>' : ''}</div>
-    <div class="m">★ ${n.stars.toLocaleString()} · ${n.category_label}</div>`;
+    <div class="m">★ ${n.stars.toLocaleString()} · ${escapeHtml(lensLine)}</div>`;
   tip.style.left = (px+16)+"px";
   tip.style.top = (py+12)+"px";
   tip.classList.add("show");
@@ -568,11 +673,13 @@ function updateUrl(n){
 function openDetail(n, opts){
   selectedNode = n;
   if (!opts || !opts.skipUrlUpdate) updateUrl(n);
-  const badge = `<span class="badge" style="background:${nodeColor(n)}22;color:${nodeColor(n)}">${n.category_label}</span>`;
+  const badge = `<span class="badge" style="background:${nodeColor(n)}22;color:${nodeColor(n)}">${catLabel(n)}</span>`;
   const maint = `<span class="badge" style="background:${maintColor[n.maintenance]}22;color:${maintColor[n.maintenance]}">${n.maintenance}</span>`;
+  const threshold = DATA.meta.suspicious_threshold;
   const warn = n.suspicious ? `<div style="background:#f8717122; border:1px solid #f8717155; border-radius:10px; padding:10px 12px; font-size:12px; line-height:1.5; color:#fca5a5; margin-bottom:16px;">
-      ⚠ <b>Unusually fast star growth.</b> This project has gained stars at a sustained rate
-      far outside typical organic patterns — a known, unresolved problem across GitHub, not a
+      ⚠ <b>Unusually fast star growth.</b> This project has gained ~${n.traction} stars/day since
+      creation${threshold ? ` (flagged at ${threshold.traction_per_day}+/day with ${threshold.min_stars.toLocaleString()}+ total stars)` : ''} —
+      far outside typical organic patterns, a known, unresolved problem across GitHub, not a
       claim of fraud. Worth verifying independently before treating star count as a popularity signal.
     </div>` : '';
 
@@ -580,8 +687,7 @@ function openDetail(n, opts){
     .sort((a,b)=>b.weight-a.weight).slice(0,6)
     .map(e=>{
       const other = e.source===n ? e.target : e.source;
-      const reason = e.reasons[0] || "";
-      return `<div><b>${escapeHtml(other.name)}</b> <span style="color:var(--muted)">${escapeHtml(reason)}</span></div>`;
+      return `<div class="conn-row" data-id="${other.id}" style="cursor:pointer;"><b>${escapeHtml(other.name)}</b> <span style="color:var(--muted)">${escapeHtml(e.reason || "")}</span></div>`;
     }).join("");
 
   document.getElementById("detailBody").innerHTML = `
@@ -617,36 +723,101 @@ function buildLegend(){
   nodes.forEach(n=>{ counts[n.category]=(counts[n.category]||0)+1; });
   const el = document.getElementById("legend");
   const suspiciousCount = DATA.meta.suspicious_count || 0;
-  el.innerHTML = CATEGORY_ORDER.filter(c=>counts[c]).map(c=>{
-    const label = DATA.meta.category_labels[c];
-    return `<div class="row" data-cat="${c}">
-      <span class="dot" style="background:${palette(c)}"></span>
-      <span class="label">${label}</span>
-      <span class="count">${counts[c]}</span>
-    </div>`;
-  }).join("") + (suspiciousCount ? `
-    <div style="display:flex; align-items:center; gap:8px; padding:7px 0 1px; margin-top:5px; border-top:1px solid var(--border); font-size:11px; color:var(--muted);">
-      <span style="width:9px; height:9px; border-radius:50%; border:1.5px dashed #f87171; flex:none;"></span>
-      <span>${suspiciousCount} flagged — abnormal star growth</span>
-    </div>` : '');
-  el.querySelectorAll(".row").forEach(row=>{
-    row.addEventListener("click", ()=>{
-      const cat = row.dataset.cat;
-      if (activeCats.size===1 && activeCats.has(cat)){
-        activeCats = new Set(CATEGORY_ORDER);
+  const threshold = DATA.meta.suspicious_threshold;
+
+  const catRows = `<div class="section-title">Category — click dot to isolate, name to toggle</div>` +
+    CATEGORY_ORDER.filter(c=>counts[c]).map(c=>{
+      const label = DATA.meta.category_labels[c];
+      return `<div class="row" data-cat="${c}">
+        <span class="dot" data-cat-dot="${c}" style="background:${palette(c)}"></span>
+        <span class="label" data-cat-toggle="${c}">${label}</span>
+        <span class="count">${counts[c]}</span>
+      </div>`;
+    }).join("");
+
+  const maintChips = `<div class="section-title">Maintenance</div><div>` +
+    MAINT_ORDER.filter(m => nodes.some(n=>n.maintenance===m)).map(m=>
+      `<span class="chip active" data-maint="${m}" style="border-color:${maintColor[m]}66;">
+        <span style="width:6px;height:6px;border-radius:50%;background:${maintColor[m]};margin-right:5px;"></span>${MAINT_LABEL[m]}
+      </span>`
+    ).join("") + `</div>`;
+
+  const suspiciousToggle = suspiciousCount ? `<div class="section-title">Data quality</div>
+    <div class="row" id="suspiciousToggle" style="cursor:pointer;" title="${threshold ? `Flagged: ${threshold.traction_per_day}+ stars/day sustained, ${threshold.min_stars.toLocaleString()}+ total stars` : ''}">
+      <span class="dot" style="border:1.5px dashed #f87171; background:transparent;"></span>
+      <span class="label">${suspiciousCount} flagged — abnormal star growth</span>
+    </div>` : '';
+
+  el.innerHTML = `<div id="legendClose">✕</div>` + catRows + maintChips + suspiciousToggle;
+
+  el.querySelectorAll("[data-cat-dot]").forEach(dot=>{
+    dot.addEventListener("click", (ev)=>{
+      ev.stopPropagation();
+      const cat = dot.dataset.catDot;
+      activeCats = (activeCats.size===1 && activeCats.has(cat)) ? new Set(CATEGORY_ORDER) : new Set([cat]);
+      syncLegendStyles();
+      markDirty();
+    });
+  });
+  el.querySelectorAll("[data-cat-toggle]").forEach(label=>{
+    label.addEventListener("click", ()=>{
+      const cat = label.dataset.catToggle;
+      if (activeCats.has(cat)){
+        if (activeCats.size > 1) activeCats.delete(cat);
       } else {
-        activeCats = new Set([cat]);
+        activeCats.add(cat);
       }
       syncLegendStyles();
       markDirty();
     });
   });
+  el.querySelectorAll("[data-maint]").forEach(chip=>{
+    chip.addEventListener("click", ()=>{
+      const m = chip.dataset.maint;
+      if (activeMaint.has(m)){
+        if (activeMaint.size > 1) activeMaint.delete(m);
+      } else {
+        activeMaint.add(m);
+      }
+      syncLegendStyles();
+      markDirty();
+    });
+  });
+  const susToggleEl = document.getElementById("suspiciousToggle");
+  if (susToggleEl){
+    susToggleEl.addEventListener("click", ()=>{
+      suspiciousOnly = !suspiciousOnly;
+      syncLegendStyles();
+      markDirty();
+    });
+  }
+  document.getElementById("legendClose")?.addEventListener("click", ()=>el.classList.remove("open"));
   syncLegendStyles();
 }
 function syncLegendStyles(){
-  document.querySelectorAll("#legend .row").forEach(row=>{
+  document.querySelectorAll("#legend .row[data-cat]").forEach(row=>{
     row.classList.toggle("dim", !activeCats.has(row.dataset.cat));
   });
+  document.querySelectorAll("#legend .chip[data-maint]").forEach(chip=>{
+    const active = activeMaint.has(chip.dataset.maint);
+    chip.classList.toggle("dim", !active);
+    chip.style.background = active ? maintColor[chip.dataset.maint]+"22" : "transparent";
+  });
+  const susToggleEl = document.getElementById("suspiciousToggle");
+  if (susToggleEl) susToggleEl.classList.toggle("dim", !suspiciousOnly);
+  document.getElementById("resetView").classList.toggle("show", filtersActive() || transform.k !== 1 || transform.x !== 0);
+}
+
+function resetView(){
+  activeCats = new Set(CATEGORY_ORDER);
+  activeMaint = new Set(MAINT_ORDER);
+  suspiciousOnly = false;
+  searchTerm = "";
+  document.getElementById("search").value = "";
+  closeDetail();
+  syncLegendStyles();
+  if (zoomBehavior) d3.select(canvas).transition().duration(500).call(zoomBehavior.transform, d3.zoomIdentity);
+  markDirty();
 }
 
 // ---------- lens bar ----------
@@ -679,7 +850,7 @@ const TOUR = [
   {title:"Welcome to Map of Agents", body:"Every dot is a real AI-agent project on GitHub, pulled live. Lines connect projects that share topics or an owning org — this is a map of the ecosystem's actual structure, not a category grid."},
   {title:"Zoom, pan, explore", body:"Scroll or pinch to zoom in — labels appear as you get closer. Drag to pan around. Click any project for full details and its strongest connections."},
   {title:"Two lenses", body:"Switch the bottom-right control to Engineering (maintenance health: active/stale/archived) or Product (traction — stars gained per day) to see the ecosystem through a different lens."},
-  {title:"Filter by category", body:"Click a category in the bottom-left legend to isolate it; click again to restore. Use search (press /) to jump straight to a project by name."},
+  {title:"Filter and search", body:"Click a category dot to isolate it, or its name to add/remove it from view. Filter by maintenance status too. Press / to search, then Enter to jump straight to a match — or press Esc / hit the ⌂ button anytime to reset."},
 ];
 let tourStep = 0;
 function startTour(){

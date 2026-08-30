@@ -108,10 +108,9 @@ def build():
             "maintenance": status,
             "traction": traction,
             "suspicious": suspicious,
-            "topics": p.get("topics", []),
             "category": p["category"],
-            "category_label": CATEGORY_LABELS[p["category"]],
         }
+        node["_topics"] = p.get("topics", [])  # build-time only, stripped before writing
         nodes.append(node)
         id_of[p["full_name"]] = i
 
@@ -121,10 +120,17 @@ def build():
     # shared-topic edges
     topic_to_ids = defaultdict(list)
     for n in nodes:
-        for t in n["topics"]:
+        for t in n["_topics"]:
             if t in GENERIC_TOPICS:
                 continue
             topic_to_ids[t].append(n["id"])
+
+    edge_best_reason = {}  # key -> (signal_weight, reason_str); tracks the single STRONGEST reason, not all of them
+
+    def note_reason(key, weight, reason):
+        prev = edge_best_reason.get(key)
+        if prev is None or weight > prev[0]:
+            edge_best_reason[key] = (weight, reason)
 
     for topic, ids in topic_to_ids.items():
         if len(ids) < 2 or len(ids) > 60:
@@ -133,7 +139,7 @@ def build():
         for a, b in itertools.combinations(sorted(ids_sorted), 2):
             key = (a, b)
             edge_weight[key] += 1.0
-            edge_reason.setdefault(key, set()).add(f"#{topic}")
+            note_reason(key, 1.0, f"#{topic}")
 
     # shared-owner edges (org clustering) — strong signal, weight it higher
     owner_to_ids = defaultdict(list)
@@ -145,10 +151,10 @@ def build():
         for a, b in itertools.combinations(sorted(ids), 2):
             key = (a, b)
             edge_weight[key] += 2.5
-            edge_reason.setdefault(key, set()).add(f"@{owner}")
+            note_reason(key, 2.5, f"@{owner}")
 
     edges_raw = [
-        {"source": a, "target": b, "weight": round(w, 2), "reasons": sorted(edge_reason[(a, b)])}
+        {"source": a, "target": b, "weight": round(w, 2), "reason": edge_best_reason[(a, b)][1]}
         for (a, b), w in edge_weight.items()
     ]
 
@@ -171,6 +177,13 @@ def build():
         connected.add(e["source"])
         connected.add(e["target"])
 
+    # Ship edges as compact tuples [source, target, weight, reason] instead of
+    # objects — with 17k+ edges, the repeated key names alone cost ~500KB.
+    edges_compact = [[e["source"], e["target"], e["weight"], e["reason"]] for e in edges]
+
+    for n in nodes:
+        del n["_topics"]
+
     categories = sorted({n["category"] for n in nodes})
     meta = {
         "total_projects": len(nodes),
@@ -190,7 +203,7 @@ def build():
         f"suspicious={suspicious_count}"
     )
     with open("docs/data.json", "w") as f:
-        json.dump({"nodes": nodes, "edges": edges, "meta": meta}, f)
+        json.dump({"nodes": nodes, "edges": edges_compact, "meta": meta}, f, separators=(",", ":"))
 
 
 if __name__ == "__main__":
