@@ -377,6 +377,14 @@ function render(){
     ctx.arc(n.x, n.y, r, 0, Math.PI*2);
     ctx.fillStyle = col;
     ctx.fill();
+    if (n.suspicious && !dim){
+      ctx.save();
+      ctx.setLineDash([2/transform.k, 2/transform.k]);
+      ctx.lineWidth = 1.5/transform.k;
+      ctx.strokeStyle = "#f87171";
+      ctx.stroke();
+      ctx.restore();
+    }
     if (n===hoverNode || n===selectedNode){
       ctx.lineWidth = 2/transform.k;
       ctx.strokeStyle = "#ffffff";
@@ -448,7 +456,7 @@ function setupInteraction(){
 function positionTooltip(px, py, n){
   const tip = document.getElementById("tooltip");
   if (!n){ hideTooltip(); return; }
-  tip.innerHTML = `<div class="n">${escapeHtml(n.name)}</div>
+  tip.innerHTML = `<div class="n">${escapeHtml(n.name)}${n.suspicious ? ' <span style="color:#f87171">⚠</span>' : ''}</div>
     <div class="m">★ ${n.stars.toLocaleString()} · ${n.category_label}</div>`;
   tip.style.left = (px+16)+"px";
   tip.style.top = (py+12)+"px";
@@ -465,6 +473,11 @@ function openDetail(n){
   selectedNode = n;
   const badge = `<span class="badge" style="background:${nodeColor(n)}22;color:${nodeColor(n)}">${n.category_label}</span>`;
   const maint = `<span class="badge" style="background:${maintColor[n.maintenance]}22;color:${maintColor[n.maintenance]}">${n.maintenance}</span>`;
+  const warn = n.suspicious ? `<div style="background:#f8717122; border:1px solid #f8717155; border-radius:10px; padding:10px 12px; font-size:12px; line-height:1.5; color:#fca5a5; margin-bottom:16px;">
+      ⚠ <b>Unusually fast star growth.</b> This project has gained stars at a sustained rate
+      far outside typical organic patterns — a known, unresolved problem across GitHub, not a
+      claim of fraud. Worth verifying independently before treating star count as a popularity signal.
+    </div>` : '';
 
   const linked = edges.filter(e=>e.source===n || e.target===n)
     .sort((a,b)=>b.weight-a.weight).slice(0,6)
@@ -478,6 +491,7 @@ function openDetail(n){
     <h2>${escapeHtml(n.name)}</h2>
     <div class="full">${escapeHtml(n.full_name)}</div>
     <div style="margin-bottom:12px;">${badge}${maint}</div>
+    ${warn}
     <p class="desc">${escapeHtml(n.description)}</p>
     <div class="grid">
       <div class="metric"><div class="v">${n.stars.toLocaleString()}</div><div class="k">Stars</div></div>
@@ -501,6 +515,7 @@ function buildLegend(){
   const counts = {};
   nodes.forEach(n=>{ counts[n.category]=(counts[n.category]||0)+1; });
   const el = document.getElementById("legend");
+  const suspiciousCount = DATA.meta.suspicious_count || 0;
   el.innerHTML = CATEGORY_ORDER.filter(c=>counts[c]).map(c=>{
     const label = DATA.meta.category_labels[c];
     return `<div class="row" data-cat="${c}">
@@ -508,7 +523,11 @@ function buildLegend(){
       <span class="label">${label}</span>
       <span class="count">${counts[c]}</span>
     </div>`;
-  }).join("");
+  }).join("") + (suspiciousCount ? `
+    <div style="display:flex; align-items:center; gap:8px; padding:7px 0 1px; margin-top:5px; border-top:1px solid var(--border); font-size:11px; color:var(--muted);">
+      <span style="width:9px; height:9px; border-radius:50%; border:1.5px dashed #f87171; flex:none;"></span>
+      <span>${suspiciousCount} flagged — abnormal star growth</span>
+    </div>` : '');
   el.querySelectorAll(".row").forEach(row=>{
     row.addEventListener("click", ()=>{
       const cat = row.dataset.cat;

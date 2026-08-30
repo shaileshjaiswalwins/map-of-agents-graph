@@ -44,6 +44,14 @@ MAX_EDGES_PER_NODE_TARGET = 12  # soft target used for final pruning
 
 SNAPSHOT_DATE = datetime(2026, 8, 30, tzinfo=timezone.utc)
 
+# A repo sustaining this many stars/day on average since creation, with enough
+# total stars for the rate to matter, is well outside organic growth patterns
+# for even a viral project (compare: torvalds/linux ~50/day lifetime,
+# a typical breakout launch ~50-150/day for its first week only). This is a
+# heuristic, not proof of fraud — flag for a human to check, don't hide it.
+SUSPICIOUS_TRACTION = 250.0
+SUSPICIOUS_MIN_STARS = 3000
+
 
 def maintenance_status(p):
     if p["archived"]:
@@ -75,8 +83,13 @@ def build():
 
     nodes = []
     id_of = {}
+    suspicious_count = 0
     for i, p in enumerate(raw):
         status = maintenance_status(p)
+        traction = traction_score(p)
+        suspicious = traction >= SUSPICIOUS_TRACTION and p["stars"] >= SUSPICIOUS_MIN_STARS
+        if suspicious:
+            suspicious_count += 1
         node = {
             "id": i,
             "name": p["name"],
@@ -93,7 +106,8 @@ def build():
             "pushed_at": p["pushed_at"],
             "days_since_push": max(p["days_since_push"], 0) if p["days_since_push"] is not None else None,
             "maintenance": status,
-            "traction": traction_score(p),
+            "traction": traction,
+            "suspicious": suspicious,
             "topics": p.get("topics", []),
             "category": p["category"],
             "category_label": CATEGORY_LABELS[p["category"]],
@@ -166,11 +180,14 @@ def build():
         "categories": len(categories),
         "snapshot_date": "2026-08-30",
         "category_labels": CATEGORY_LABELS,
+        "suspicious_count": suspicious_count,
+        "suspicious_threshold": {"traction_per_day": SUSPICIOUS_TRACTION, "min_stars": SUSPICIOUS_MIN_STARS},
     }
 
     print(
         f"nodes={len(nodes)} edges={len(edges)} connected={len(connected)} "
-        f"categories={len(categories)} total_stars={meta['total_stars']:,}"
+        f"categories={len(categories)} total_stars={meta['total_stars']:,} "
+        f"suspicious={suspicious_count}"
     )
     with open("docs/data.json", "w") as f:
         json.dump({"nodes": nodes, "edges": edges, "meta": meta}, f)
