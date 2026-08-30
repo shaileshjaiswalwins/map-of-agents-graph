@@ -303,6 +303,7 @@ let DATA = null, nodes = [], edges = [], nodeById = new Map();
 let simulation = null;
 let transform = d3.zoomIdentity;
 let hoverNode = null, selectedNode = null;
+let selectedNeighborIds = null;
 let activeCats = new Set(CATEGORY_ORDER);
 let activeMaint = new Set(MAINT_ORDER);
 let suspiciousOnly = false;
@@ -313,6 +314,10 @@ let zoomBehavior = null;
 let pendingFocusId = null;
 
 function catLabel(n){ return DATA.meta.category_labels[n.category]; }
+function updateResetVisibility(){
+  const rv = document.getElementById("resetView");
+  if (rv) rv.classList.toggle("show", filtersActive() || !!selectedNode || transform.k !== 1 || transform.x !== 0 || transform.y !== 0);
+}
 function filtersActive(){
   return activeCats.size < CATEGORY_ORDER.length || activeMaint.size < MAINT_ORDER.length || suspiciousOnly || !!searchTerm;
 }
@@ -434,8 +439,7 @@ function setupZoom(){
       transform = ev.transform;
       if (ev.sourceEvent) hideHint();
       markDirty();
-      const rv = document.getElementById("resetView");
-      if (rv) rv.classList.toggle("show", filtersActive() || transform.k !== 1 || transform.x !== 0 || transform.y !== 0);
+      updateResetVisibility();
     });
   d3.select(canvas).call(zoomBehavior).on("dblclick.zoom", null);
 }
@@ -522,9 +526,11 @@ function render(){
   ctx.lineWidth = 1/transform.k;
   for (const e of edges){
     const sv = nodeVisible(e.source), tv = nodeVisible(e.target);
-    const dim = anyFilter && !(sv && tv);
+    const filterDim = anyFilter && !(sv && tv);
     const hot = (hoverNode && (e.source===hoverNode || e.target===hoverNode)) ||
                 (selectedNode && (e.source===selectedNode || e.target===selectedNode));
+    const selDim = selectedNode && !hot;
+    const dim = filterDim || selDim;
     ctx.strokeStyle = hot ? "#22d3ee88" : (dim ? "#ffffff08" : "#ffffff1c");
     ctx.beginPath();
     ctx.moveTo(e.source.x, e.source.y);
@@ -534,7 +540,9 @@ function render(){
 
   // nodes
   for (const n of nodes){
-    const dim = anyFilter && !nodeVisible(n);
+    const filterDim = anyFilter && !nodeVisible(n);
+    const selDim = selectedNode && n !== selectedNode && !(selectedNeighborIds && selectedNeighborIds.has(n.id));
+    const dim = filterDim || selDim;
     const r = radiusFor(n);
     const col = nodeColor(n);
     ctx.globalAlpha = dim ? 0.12 : 1;
@@ -555,7 +563,8 @@ function render(){
       ctx.strokeStyle = "#ffffff";
       ctx.stroke();
     }
-    if ((showLabels || n===hoverNode || n===selectedNode) && !dim && r*transform.k > 3){
+    const forceLabel = n===hoverNode || n===selectedNode || (selectedNode && selectedNeighborIds && selectedNeighborIds.has(n.id));
+    if ((showLabels || forceLabel) && !dim && r*transform.k > 3){
       ctx.globalAlpha = dim ? 0.12 : 1;
       ctx.font = `${11/transform.k}px Inter, system-ui, sans-serif`;
       ctx.fillStyle = "#e7e9eecc";
@@ -607,7 +616,7 @@ function setupInteraction(){
   search.addEventListener("input", ()=>{
     searchTerm = search.value.trim().toLowerCase();
     markDirty();
-    document.getElementById("resetView").classList.toggle("show", filtersActive() || transform.k !== 1 || transform.x !== 0 || transform.y !== 0);
+    updateResetVisibility();
   });
   search.addEventListener("keydown", (ev)=>{
     if (ev.key === "Enter"){ ev.preventDefault(); navigateToSearchMatches(); }
@@ -683,8 +692,10 @@ function openDetail(n, opts){
       claim of fraud. Worth verifying independently before treating star count as a popularity signal.
     </div>` : '';
 
-  const linked = edges.filter(e=>e.source===n || e.target===n)
-    .sort((a,b)=>b.weight-a.weight).slice(0,6)
+  const touchingEdges = edges.filter(e=>e.source===n || e.target===n).sort((a,b)=>b.weight-a.weight);
+  selectedNeighborIds = new Set(touchingEdges.map(e => (e.source===n ? e.target : e.source).id));
+
+  const linked = touchingEdges.slice(0,6)
     .map(e=>{
       const other = e.source===n ? e.target : e.source;
       return `<div class="conn-row" data-id="${other.id}" style="cursor:pointer;"><b>${escapeHtml(other.name)}</b> <span style="color:var(--muted)">${escapeHtml(e.reason || "")}</span></div>`;
@@ -710,11 +721,16 @@ function openDetail(n, opts){
     </div>
   `;
   document.getElementById("detail").classList.add("open");
+  updateResetVisibility();
+  markDirty();
 }
 function closeDetail(){
   selectedNode = null;
+  selectedNeighborIds = null;
   updateUrl(null);
   document.getElementById("detail").classList.remove("open");
+  updateResetVisibility();
+  markDirty();
 }
 
 // ---------- legend ----------
@@ -805,7 +821,7 @@ function syncLegendStyles(){
   });
   const susToggleEl = document.getElementById("suspiciousToggle");
   if (susToggleEl) susToggleEl.classList.toggle("dim", !suspiciousOnly);
-  document.getElementById("resetView").classList.toggle("show", filtersActive() || transform.k !== 1 || transform.x !== 0);
+  updateResetVisibility();
 }
 
 function resetView(){
