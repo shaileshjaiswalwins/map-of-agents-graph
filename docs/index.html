@@ -248,7 +248,7 @@ function resize(){
   canvas.style.width = w+"px"; canvas.style.height = h+"px";
   ctx.setTransform(dpr,0,0,dpr,0,0);
 }
-window.addEventListener("resize", resize);
+window.addEventListener("resize", ()=>{ resize(); markDirty(); });
 
 function radiusFor(n){
   return Math.max(3.2, Math.sqrt(n.stars) * 0.045);
@@ -316,7 +316,8 @@ function startSimulation(){
     .force("collide", d3.forceCollide().radius(d=>radiusFor(d)+3).strength(0.8))
     .force("x", d3.forceX(window.innerWidth/2).strength(0.015))
     .force("y", d3.forceY(window.innerHeight/2).strength(0.015))
-    .alpha(1).alphaDecay(0.018);
+    .alpha(1).alphaDecay(0.018)
+    .on("tick", markDirty);
 }
 
 // ---------- zoom/pan ----------
@@ -325,7 +326,7 @@ function setupZoom(){
     .scaleExtent([0.1, 8])
     .on("start", ()=>canvas.classList.add("grabbing"))
     .on("end", ()=>canvas.classList.remove("grabbing"))
-    .on("zoom", (ev)=>{ transform = ev.transform; hideHint(); });
+    .on("zoom", (ev)=>{ transform = ev.transform; hideHint(); markDirty(); });
   d3.select(canvas).call(zoom).on("dblclick.zoom", null);
   canvas.__zoom = zoom;
 }
@@ -335,9 +336,11 @@ function hideHint(){
   if (!h.classList.contains("hidden")){ h.classList.add("hidden"); }
 }
 
-// ---------- render loop ----------
+// ---------- render loop (dirty-flag driven — no wasted redraws once settled) ----------
+let dirty = true;
+function markDirty(){ dirty = true; }
 function tick(){
-  render();
+  if (dirty){ dirty = false; render(); }
   requestAnimationFrame(tick);
 }
 
@@ -414,20 +417,22 @@ function setupInteraction(){
     if (n !== hoverNode){
       hoverNode = n;
       canvas.style.cursor = n ? "pointer" : "grab";
+      markDirty();
     }
     positionTooltip(ev.clientX, ev.clientY, n);
   });
-  canvas.addEventListener("mouseleave", ()=>{ hoverNode=null; hideTooltip(); });
+  canvas.addEventListener("mouseleave", ()=>{ hoverNode=null; hideTooltip(); markDirty(); });
   canvas.addEventListener("click", (ev)=>{
     const n = findNodeAt(ev.clientX, ev.clientY);
     if (n) openDetail(n); else closeDetail();
+    markDirty();
   });
 
   document.getElementById("closeDetail").addEventListener("click", closeDetail);
   document.getElementById("replayTour").addEventListener("click", startTour);
 
   const search = document.getElementById("search");
-  search.addEventListener("input", ()=>{ searchTerm = search.value.trim().toLowerCase(); });
+  search.addEventListener("input", ()=>{ searchTerm = search.value.trim().toLowerCase(); markDirty(); });
 
   window.addEventListener("keydown", (ev)=>{
     if (ev.key === "/" && document.activeElement !== search){
@@ -435,7 +440,7 @@ function setupInteraction(){
     } else if (ev.key === "Escape"){
       if (document.getElementById("onboard").classList.contains("show")) endTour();
       else if (document.getElementById("detail").classList.contains("open")) closeDetail();
-      else if (searchTerm){ search.value=""; searchTerm=""; }
+      else if (searchTerm){ search.value=""; searchTerm=""; markDirty(); }
       search.blur();
     }
   });
@@ -514,6 +519,7 @@ function buildLegend(){
         activeCats = new Set([cat]);
       }
       syncLegendStyles();
+      markDirty();
     });
   });
   syncLegendStyles();
@@ -538,6 +544,7 @@ function buildLensBar(){
       lens = btn.dataset.lens;
       localStorage.setItem("moag_lens", lens);
       syncLensStyles();
+      markDirty();
     });
   });
   syncLensStyles();

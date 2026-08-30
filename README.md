@@ -1,8 +1,8 @@
 # Map of Agents — Graph
 
-A **force-directed map of the AI agent ecosystem** — hundreds of real projects pulled live
-from the GitHub API, connected by the relationships that actually exist between them: shared
-topic tags and shared owning orgs. Where [Map of Agents](https://github.com/shaileshjaiswalwins/map-of-agents)
+A **force-directed map of the AI agent ecosystem** — 2,040 real projects pulled live
+from the GitHub API, connected by 17,000+ edges built from the relationships that actually
+exist between them: shared topic tags and shared owning orgs. Where [Map of Agents](https://github.com/shaileshjaiswalwins/map-of-agents)
 groups projects into a treemap by category, this one shows the *network* — which projects
 cluster together, which ecosystems (LangChain, MCP, AutoGPT-likes) are hubs, and which
 projects are outliers with few connections.
@@ -14,6 +14,21 @@ from shared GitHub topics and shared organizations — a genuine structural sign
 layout trick.
 
 **[Live demo →](https://shaileshjaiswalwins.github.io/map-of-agents-graph/)**
+
+## Screenshots
+
+### Category lens — the ecosystem's actual shape
+Each dot is a project; lines are shared topics or shared owning orgs. Dense clusters are
+crowded sub-spaces; the loose strands reaching outward are the outliers.
+![Map of Agents — category lens](assets/screenshot-overview.jpg)
+
+### Engineering lens — maintenance health
+Green = active, amber = moderate, orange = stale, grey = archived/unknown. Spot risk in the
+crowd before you depend on something.
+![Map of Agents — engineering lens](assets/screenshot-engineering-lens.jpg)
+
+### Click any project — connections and why
+![Map of Agents — project detail panel](assets/screenshot-detail.jpg)
 
 ## What it's for
 
@@ -50,6 +65,15 @@ layout trick.
 - **Onboarding**: a short 4-step tour on first visit, replayable via the `?` button.
 - **No build step** — a static `docs/index.html` + `docs/data.json`, styled with Tailwind
   (CDN) and rendered with D3, hosted directly from GitHub Pages.
+
+## A note on data honesty
+
+Star counts come straight from the GitHub API with no fraud-filtering — like Map of GitHub,
+this reflects GitHub as it actually reports itself, including any repos with anomalously
+fast star growth (a known, unsolved problem across the ecosystem, not something this project
+can reliably detect). Node size is stars but under a square-root scale specifically so one
+outlier can't visually dominate a category; if a bubble looks implausibly large for how known
+the project is, that's a signal to check it, not an editorial claim about its quality.
 
 ## Running locally
 
