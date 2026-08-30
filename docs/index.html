@@ -1,0 +1,590 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Map of Agents — a connected view of the AI agent ecosystem</title>
+<meta name="description" content="A force-directed map of the AI agent ecosystem: hundreds of real projects connected by shared topics and organizations, live from GitHub." />
+<script src="https://cdnjs.cloudflare.com/ajax/libs/tailwindcss/3.4.1/tailwind.min.js" onerror="this.onerror=null;var s=document.createElement('script');s.src='https://cdn.tailwindcss.com';document.head.appendChild(s);"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.9.0/d3.min.js"></script>
+<style>
+  :root{
+    --bg:#08090c; --bg2:#0d0f14; --panel:#111319ee; --border:#ffffff14;
+    --text:#e7e9ee; --muted:#8b90a0; --accent:#22d3ee; --accent2:#a78bfa;
+  }
+  *{box-sizing:border-box;}
+  html,body{height:100%;}
+  body{
+    margin:0; background:radial-gradient(1200px 800px at 70% -10%, #14182a 0%, var(--bg) 60%);
+    color:var(--text); font-family:'Inter',system-ui,sans-serif; overflow:hidden;
+  }
+  ::-webkit-scrollbar{width:8px;height:8px;}
+  ::-webkit-scrollbar-thumb{background:#ffffff22;border-radius:8px;}
+  ::-webkit-scrollbar-track{background:transparent;}
+
+  #canvas{position:fixed;inset:0;display:block;cursor:grab;}
+  #canvas.grabbing{cursor:grabbing;}
+
+  .glass{
+    background:var(--panel); backdrop-filter:blur(16px) saturate(140%);
+    border:1px solid var(--border); box-shadow:0 8px 30px #00000055;
+  }
+
+  header#hdr{
+    position:fixed; top:0; left:0; right:0; z-index:20;
+    display:flex; align-items:center; gap:14px; padding:12px 18px;
+  }
+  header#hdr h1{font-size:15px; font-weight:700; letter-spacing:-.01em; margin:0; white-space:nowrap;}
+  header#hdr .stat{font-variant-numeric:tabular-nums; font-weight:600; color:var(--text);}
+  header#hdr .stat-label{color:var(--muted); font-weight:400;}
+
+  .pill-btn{
+    padding:6px 12px; border-radius:999px; font-size:12.5px; font-weight:500;
+    color:var(--muted); cursor:pointer; user-select:none; transition:all .15s cubic-bezier(.4,0,.2,1);
+    border:1px solid transparent;
+  }
+  .pill-btn:hover{color:var(--text); background:#ffffff0d;}
+  .pill-btn.active{color:#000; background:var(--accent); font-weight:600;}
+
+  #search{
+    background:transparent; border:none; outline:none; color:var(--text);
+    font-size:13px; width:180px;
+  }
+  #search::placeholder{color:var(--muted);}
+  .kbd{
+    font-family:ui-monospace,monospace; font-size:10px; color:var(--muted);
+    background:#ffffff10; border:1px solid var(--border); border-radius:5px;
+    padding:1px 5px; margin-left:auto;
+  }
+
+  #legend{
+    position:fixed; left:16px; bottom:16px; z-index:20; border-radius:16px;
+    padding:12px 14px; font-size:12px; max-width:230px;
+  }
+  #legend .row{display:flex; align-items:center; gap:8px; padding:3px 0; cursor:pointer; border-radius:6px; transition:opacity .15s;}
+  #legend .row:hover{opacity:.85;}
+  #legend .row.dim{opacity:.35;}
+  #legend .dot{width:9px; height:9px; border-radius:50%; flex:none;}
+  #legend .label{color:var(--text); font-weight:500;}
+  #legend .count{color:var(--muted); margin-left:auto; font-variant-numeric:tabular-nums; font-size:11px;}
+
+  #lensBar{position:fixed; right:16px; bottom:16px; z-index:20; border-radius:14px; padding:8px; display:flex; gap:2px;}
+
+  #hint{
+    position:fixed; left:50%; bottom:16px; transform:translateX(-50%); z-index:15;
+    font-size:11.5px; color:var(--muted); background:var(--panel); border:1px solid var(--border);
+    border-radius:999px; padding:6px 14px; display:flex; gap:14px; align-items:center;
+    opacity:1; transition:opacity .4s ease; pointer-events:none;
+  }
+  #hint.hidden{opacity:0;}
+  #hint span{display:flex; align-items:center; gap:5px;}
+
+  #detail{
+    position:fixed; top:0; right:0; bottom:0; width:340px; z-index:30;
+    transform:translateX(100%); transition:transform .32s cubic-bezier(.22,1,.36,1);
+    padding:20px; overflow-y:auto;
+  }
+  #detail.open{transform:translateX(0);}
+  #detail h2{font-size:18px; font-weight:700; margin:0 0 2px;}
+  #detail .full{color:var(--muted); font-size:12px; margin-bottom:14px;}
+  #detail p.desc{font-size:13px; line-height:1.6; color:#c7cad4; margin-bottom:18px;}
+  #detail .grid{display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-bottom:18px;}
+  #detail .metric{background:#ffffff08; border:1px solid var(--border); border-radius:10px; padding:10px 12px;}
+  #detail .metric .v{font-size:17px; font-weight:700; font-variant-numeric:tabular-nums;}
+  #detail .metric .k{font-size:10.5px; color:var(--muted); text-transform:uppercase; letter-spacing:.04em; margin-top:2px;}
+  #detail .badge{display:inline-block; font-size:11px; padding:3px 9px; border-radius:999px; font-weight:600; margin-right:6px;}
+  #detail .conns{font-size:11.5px; color:var(--muted); margin-top:4px; line-height:1.9;}
+  #detail .conns b{color:var(--text); font-weight:500;}
+  #detail a.gh{
+    display:block; text-align:center; margin-top:16px; padding:10px; border-radius:10px;
+    background:var(--accent); color:#000; font-weight:600; font-size:13px; text-decoration:none;
+    transition:transform .12s;
+  }
+  #detail a.gh:active{transform:scale(.97);}
+  #closeDetail{
+    position:absolute; top:16px; right:16px; width:26px; height:26px; border-radius:50%;
+    background:#ffffff10; display:flex; align-items:center; justify-content:center; cursor:pointer;
+    font-size:14px; color:var(--muted); transition:background .15s;
+  }
+  #closeDetail:hover{background:#ffffff22; color:var(--text);}
+
+  #tooltip{
+    position:fixed; z-index:25; pointer-events:none; padding:8px 11px; border-radius:10px;
+    font-size:12px; max-width:240px; opacity:0; transform:scale(.96); transform-origin:top left;
+    transition:opacity .12s ease, transform .12s ease;
+  }
+  #tooltip.show{opacity:1; transform:scale(1);}
+  #tooltip .n{font-weight:600; color:var(--text);}
+  #tooltip .m{color:var(--muted); font-size:11px; margin-top:2px;}
+
+  #loading{
+    position:fixed; inset:0; z-index:50; display:flex; flex-direction:column; align-items:center;
+    justify-content:center; gap:14px; background:var(--bg); transition:opacity .5s ease;
+  }
+  #loading.hide{opacity:0; pointer-events:none;}
+  .spinner{width:28px; height:28px; border-radius:50%; border:2.5px solid #ffffff22; border-top-color:var(--accent); animation:spin .8s linear infinite;}
+  @keyframes spin{to{transform:rotate(360deg);}}
+  #loading .msg{font-size:12.5px; color:var(--muted);}
+
+  #onboard{
+    position:fixed; inset:0; z-index:60; display:flex; align-items:center; justify-content:center;
+    background:#000000a0; opacity:0; transition:opacity .3s ease; pointer-events:none;
+  }
+  #onboard.show{opacity:1; pointer-events:all;}
+  #onboardCard{
+    width:380px; border-radius:20px; padding:26px; transform:translateY(8px) scale(.98);
+    transition:transform .3s cubic-bezier(.22,1,.36,1);
+  }
+  #onboard.show #onboardCard{transform:translateY(0) scale(1);}
+  #onboardCard h3{font-size:17px; font-weight:700; margin:0 0 8px;}
+  #onboardCard p{font-size:13.5px; line-height:1.6; color:#c7cad4; margin:0 0 18px;}
+  #onboardCard .dots{display:flex; gap:5px; margin-bottom:18px;}
+  #onboardCard .dot{width:6px; height:6px; border-radius:50%; background:#ffffff2a; transition:background .2s;}
+  #onboardCard .dot.on{background:var(--accent);}
+  #onboardCard .row{display:flex; justify-content:space-between; align-items:center;}
+  #onboardCard .skip{color:var(--muted); font-size:12.5px; cursor:pointer;}
+  #onboardCard .next{
+    background:var(--accent); color:#000; font-weight:600; font-size:12.5px; padding:8px 16px;
+    border-radius:999px; cursor:pointer; transition:transform .12s;
+  }
+  #onboardCard .next:active{transform:scale(.96);}
+  #replayTour{
+    position:fixed; top:12px; right:16px; z-index:20; width:28px; height:28px; border-radius:50%;
+    display:flex; align-items:center; justify-content:center; font-size:13px; font-weight:600;
+    color:var(--muted); cursor:pointer; transition:all .15s;
+  }
+  #replayTour:hover{color:var(--text); background:#ffffff0d;}
+
+  @media (max-width:720px){
+    #legend{display:none;}
+    header#hdr{flex-wrap:wrap;}
+    #detail{width:100%;}
+  }
+</style>
+</head>
+<body>
+
+<canvas id="canvas"></canvas>
+
+<header id="hdr">
+  <h1>Map of Agents</h1>
+  <div class="glass" style="border-radius:999px; padding:6px 14px; display:flex; align-items:center; gap:14px; font-size:12px;">
+    <span><span class="stat" id="statNodes">0</span> <span class="stat-label">projects</span></span>
+    <span style="color:var(--border)">·</span>
+    <span><span class="stat" id="statEdges">0</span> <span class="stat-label">connections</span></span>
+    <span style="color:var(--border)">·</span>
+    <span><span class="stat" id="statStars">0</span> <span class="stat-label">stars</span></span>
+  </div>
+  <div class="glass" style="border-radius:999px; padding:6px 12px; display:flex; align-items:center; gap:6px; flex:1; max-width:260px;">
+    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#8b90a0" stroke-width="2.4"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.35-4.35"/></svg>
+    <input id="search" placeholder="Search projects..." />
+    <span class="kbd">/</span>
+  </div>
+</header>
+
+<div id="replayTour" class="glass">?</div>
+
+<div id="legend" class="glass"></div>
+
+<div id="lensBar" class="glass"></div>
+
+<div id="hint" class="glass">
+  <span>scroll / pinch to zoom</span>
+  <span>drag to pan</span>
+  <span>click a node for details</span>
+</div>
+
+<div id="detail" class="glass">
+  <div id="closeDetail">✕</div>
+  <div id="detailBody"></div>
+</div>
+
+<div id="tooltip" class="glass"></div>
+
+<div id="loading">
+  <div class="spinner"></div>
+  <div class="msg" id="loadingMsg">Loading live GitHub data…</div>
+</div>
+
+<div id="onboard">
+  <div id="onboardCard" class="glass"></div>
+</div>
+
+<script>
+(function(){
+"use strict";
+
+const CATEGORY_ORDER = [
+  "agent-frameworks","autonomous-agents","agent-protocols-infra",
+  "agent-memory-tools","agent-eval-observability","coding-agents","multi-agent-simulation"
+];
+const palette = d3.scaleOrdinal().domain(CATEGORY_ORDER)
+  .range(["#22d3ee","#a78bfa","#f472b6","#fb923c","#4ade80","#facc15","#60a5fa"]);
+
+const maintColor = {active:"#4ade80", moderate:"#facc15", stale:"#fb923c", archived:"#6b7280", unknown:"#6b7280"};
+function tractionColor(t){
+  const s = d3.scaleLog().domain([0.5, 500]).range([0,1]).clamp(true);
+  return d3.interpolateRgb("#374151", "#22d3ee")(s(Math.max(t,0.01)));
+}
+
+let DATA = null, nodes = [], edges = [], nodeById = new Map();
+let simulation = null;
+let transform = d3.zoomIdentity;
+let hoverNode = null, selectedNode = null;
+let activeCats = new Set(CATEGORY_ORDER);
+let lens = localStorage.getItem("moag_lens") || "category";
+let searchTerm = "";
+let dpr = Math.max(window.devicePixelRatio || 1, 1);
+
+const canvas = document.getElementById("canvas");
+const ctx = canvas.getContext("2d");
+
+function resize(){
+  const w = window.innerWidth, h = window.innerHeight;
+  canvas.width = w * dpr; canvas.height = h * dpr;
+  canvas.style.width = w+"px"; canvas.style.height = h+"px";
+  ctx.setTransform(dpr,0,0,dpr,0,0);
+}
+window.addEventListener("resize", resize);
+
+function radiusFor(n){
+  return Math.max(3.2, Math.sqrt(n.stars) * 0.045);
+}
+
+function nodeColor(n){
+  if (lens === "maintenance") return maintColor[n.maintenance] || "#6b7280";
+  if (lens === "traction") return tractionColor(n.traction);
+  return palette(n.category);
+}
+
+function nodeVisible(n){
+  if (!activeCats.has(n.category)) return false;
+  if (searchTerm && !(n.name.toLowerCase().includes(searchTerm) || n.full_name.toLowerCase().includes(searchTerm))) return false;
+  return true;
+}
+
+// ---------- data load ----------
+fetch("data.json").then(r=>r.json()).then(d=>{
+  DATA = d;
+  nodes = d.nodes.map(n => Object.assign({}, n, {
+    x: window.innerWidth/2 + (Math.random()-0.5)*400,
+    y: window.innerHeight/2 + (Math.random()-0.5)*400,
+  }));
+  nodeById = new Map(nodes.map(n=>[n.id,n]));
+  edges = d.edges.map(e => Object.assign({}, e, {source: nodeById.get(e.source), target: nodeById.get(e.target)}));
+
+  document.getElementById("loadingMsg").textContent = "Laying out "+nodes.length+" projects…";
+  countUp("statNodes", d.meta.total_projects);
+  countUp("statEdges", d.meta.total_edges);
+  countUp("statStars", d.meta.total_stars, v => v>=1000?(v/1000).toFixed(1)+"k":v);
+
+  buildLegend();
+  buildLensBar();
+
+  resize();
+  startSimulation();
+  setupZoom();
+  setupInteraction();
+  requestAnimationFrame(tick);
+
+  setTimeout(()=>{ document.getElementById("loading").classList.add("hide"); }, 400);
+  if (!localStorage.getItem("moag_onboarded")) setTimeout(startTour, 700);
+});
+
+function countUp(id, target, fmt){
+  const el = document.getElementById(id);
+  const t0 = performance.now(), dur = 700;
+  function frame(t){
+    const p = Math.min(1,(t-t0)/dur);
+    const eased = 1 - Math.pow(1-p, 3);
+    const v = Math.round(target*eased);
+    el.textContent = fmt ? fmt(v) : v.toLocaleString();
+    if (p<1) requestAnimationFrame(frame);
+  }
+  requestAnimationFrame(frame);
+}
+
+// ---------- force simulation ----------
+function startSimulation(){
+  simulation = d3.forceSimulation(nodes)
+    .force("charge", d3.forceManyBody().strength(-70).distanceMax(420))
+    .force("link", d3.forceLink(edges).id(d=>d.id).distance(e => 60 - Math.min(e.weight,8)*4).strength(e => Math.min(0.9, 0.15 + e.weight*0.05)))
+    .force("center", d3.forceCenter(window.innerWidth/2, window.innerHeight/2).strength(0.02))
+    .force("collide", d3.forceCollide().radius(d=>radiusFor(d)+3).strength(0.8))
+    .force("x", d3.forceX(window.innerWidth/2).strength(0.015))
+    .force("y", d3.forceY(window.innerHeight/2).strength(0.015))
+    .alpha(1).alphaDecay(0.018);
+}
+
+// ---------- zoom/pan ----------
+function setupZoom(){
+  const zoom = d3.zoom()
+    .scaleExtent([0.1, 8])
+    .on("start", ()=>canvas.classList.add("grabbing"))
+    .on("end", ()=>canvas.classList.remove("grabbing"))
+    .on("zoom", (ev)=>{ transform = ev.transform; hideHint(); });
+  d3.select(canvas).call(zoom).on("dblclick.zoom", null);
+  canvas.__zoom = zoom;
+}
+
+function hideHint(){
+  const h = document.getElementById("hint");
+  if (!h.classList.contains("hidden")){ h.classList.add("hidden"); }
+}
+
+// ---------- render loop ----------
+function tick(){
+  render();
+  requestAnimationFrame(tick);
+}
+
+function render(){
+  const w = window.innerWidth, h = window.innerHeight;
+  ctx.clearRect(0,0,w,h);
+  ctx.save();
+  ctx.translate(transform.x, transform.y);
+  ctx.scale(transform.k, transform.k);
+
+  const showLabels = transform.k > 1.4;
+  const anyFilter = activeCats.size < CATEGORY_ORDER.length || searchTerm;
+
+  // edges
+  ctx.lineWidth = 1/transform.k;
+  for (const e of edges){
+    const sv = nodeVisible(e.source), tv = nodeVisible(e.target);
+    const dim = anyFilter && !(sv && tv);
+    const hot = (hoverNode && (e.source===hoverNode || e.target===hoverNode)) ||
+                (selectedNode && (e.source===selectedNode || e.target===selectedNode));
+    ctx.strokeStyle = hot ? "#22d3ee88" : (dim ? "#ffffff08" : "#ffffff1c");
+    ctx.beginPath();
+    ctx.moveTo(e.source.x, e.source.y);
+    ctx.lineTo(e.target.x, e.target.y);
+    ctx.stroke();
+  }
+
+  // nodes
+  for (const n of nodes){
+    const dim = anyFilter && !nodeVisible(n);
+    const r = radiusFor(n);
+    const col = nodeColor(n);
+    ctx.globalAlpha = dim ? 0.12 : 1;
+    ctx.beginPath();
+    ctx.arc(n.x, n.y, r, 0, Math.PI*2);
+    ctx.fillStyle = col;
+    ctx.fill();
+    if (n===hoverNode || n===selectedNode){
+      ctx.lineWidth = 2/transform.k;
+      ctx.strokeStyle = "#ffffff";
+      ctx.stroke();
+    }
+    if ((showLabels || n===hoverNode || n===selectedNode) && !dim && r*transform.k > 3){
+      ctx.globalAlpha = dim ? 0.12 : 1;
+      ctx.font = `${11/transform.k}px Inter, system-ui, sans-serif`;
+      ctx.fillStyle = "#e7e9eecc";
+      ctx.textBaseline = "middle";
+      ctx.fillText(n.name, n.x + r + 4/transform.k, n.y);
+    }
+  }
+  ctx.globalAlpha = 1;
+  ctx.restore();
+}
+
+// ---------- picking ----------
+function screenToWorld(px, py){
+  return [(px - transform.x)/transform.k, (py - transform.y)/transform.k];
+}
+function findNodeAt(px, py){
+  const [wx, wy] = screenToWorld(px, py);
+  let best = null, bestD = Infinity;
+  for (const n of nodes){
+    const r = radiusFor(n) + 2;
+    const dx = n.x-wx, dy = n.y-wy;
+    const d = dx*dx+dy*dy;
+    if (d < r*r && d < bestD){ best = n; bestD = d; }
+  }
+  return best;
+}
+
+function setupInteraction(){
+  canvas.addEventListener("mousemove", (ev)=>{
+    const n = findNodeAt(ev.clientX, ev.clientY);
+    if (n !== hoverNode){
+      hoverNode = n;
+      canvas.style.cursor = n ? "pointer" : "grab";
+    }
+    positionTooltip(ev.clientX, ev.clientY, n);
+  });
+  canvas.addEventListener("mouseleave", ()=>{ hoverNode=null; hideTooltip(); });
+  canvas.addEventListener("click", (ev)=>{
+    const n = findNodeAt(ev.clientX, ev.clientY);
+    if (n) openDetail(n); else closeDetail();
+  });
+
+  document.getElementById("closeDetail").addEventListener("click", closeDetail);
+  document.getElementById("replayTour").addEventListener("click", startTour);
+
+  const search = document.getElementById("search");
+  search.addEventListener("input", ()=>{ searchTerm = search.value.trim().toLowerCase(); });
+
+  window.addEventListener("keydown", (ev)=>{
+    if (ev.key === "/" && document.activeElement !== search){
+      ev.preventDefault(); search.focus();
+    } else if (ev.key === "Escape"){
+      if (document.getElementById("onboard").classList.contains("show")) endTour();
+      else if (document.getElementById("detail").classList.contains("open")) closeDetail();
+      else if (searchTerm){ search.value=""; searchTerm=""; }
+      search.blur();
+    }
+  });
+}
+
+function positionTooltip(px, py, n){
+  const tip = document.getElementById("tooltip");
+  if (!n){ hideTooltip(); return; }
+  tip.innerHTML = `<div class="n">${escapeHtml(n.name)}</div>
+    <div class="m">★ ${n.stars.toLocaleString()} · ${n.category_label}</div>`;
+  tip.style.left = (px+16)+"px";
+  tip.style.top = (py+12)+"px";
+  tip.classList.add("show");
+}
+function hideTooltip(){ document.getElementById("tooltip").classList.remove("show"); }
+
+function escapeHtml(s){
+  return (s||"").replace(/[&<>"']/g, c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+}
+
+// ---------- detail panel ----------
+function openDetail(n){
+  selectedNode = n;
+  const badge = `<span class="badge" style="background:${nodeColor(n)}22;color:${nodeColor(n)}">${n.category_label}</span>`;
+  const maint = `<span class="badge" style="background:${maintColor[n.maintenance]}22;color:${maintColor[n.maintenance]}">${n.maintenance}</span>`;
+
+  const linked = edges.filter(e=>e.source===n || e.target===n)
+    .sort((a,b)=>b.weight-a.weight).slice(0,6)
+    .map(e=>{
+      const other = e.source===n ? e.target : e.source;
+      const reason = e.reasons[0] || "";
+      return `<div><b>${escapeHtml(other.name)}</b> <span style="color:var(--muted)">${escapeHtml(reason)}</span></div>`;
+    }).join("");
+
+  document.getElementById("detailBody").innerHTML = `
+    <h2>${escapeHtml(n.name)}</h2>
+    <div class="full">${escapeHtml(n.full_name)}</div>
+    <div style="margin-bottom:12px;">${badge}${maint}</div>
+    <p class="desc">${escapeHtml(n.description)}</p>
+    <div class="grid">
+      <div class="metric"><div class="v">${n.stars.toLocaleString()}</div><div class="k">Stars</div></div>
+      <div class="metric"><div class="v">${n.forks.toLocaleString()}</div><div class="k">Forks</div></div>
+      <div class="metric"><div class="v">${n.open_issues.toLocaleString()}</div><div class="k">Open issues</div></div>
+      <div class="metric"><div class="v">${n.traction}</div><div class="k">Traction (★/day)</div></div>
+    </div>
+    <div style="font-size:11.5px; color:var(--muted); margin-bottom:6px;">CONNECTED TO</div>
+    <div class="conns">${linked || "No strong connections found."}</div>
+    <a class="gh" href="${n.url}" target="_blank" rel="noopener">View on GitHub →</a>
+  `;
+  document.getElementById("detail").classList.add("open");
+}
+function closeDetail(){
+  selectedNode = null;
+  document.getElementById("detail").classList.remove("open");
+}
+
+// ---------- legend ----------
+function buildLegend(){
+  const counts = {};
+  nodes.forEach(n=>{ counts[n.category]=(counts[n.category]||0)+1; });
+  const el = document.getElementById("legend");
+  el.innerHTML = CATEGORY_ORDER.filter(c=>counts[c]).map(c=>{
+    const label = DATA.meta.category_labels[c];
+    return `<div class="row" data-cat="${c}">
+      <span class="dot" style="background:${palette(c)}"></span>
+      <span class="label">${label}</span>
+      <span class="count">${counts[c]}</span>
+    </div>`;
+  }).join("");
+  el.querySelectorAll(".row").forEach(row=>{
+    row.addEventListener("click", ()=>{
+      const cat = row.dataset.cat;
+      if (activeCats.size===1 && activeCats.has(cat)){
+        activeCats = new Set(CATEGORY_ORDER);
+      } else {
+        activeCats = new Set([cat]);
+      }
+      syncLegendStyles();
+    });
+  });
+  syncLegendStyles();
+}
+function syncLegendStyles(){
+  document.querySelectorAll("#legend .row").forEach(row=>{
+    row.classList.toggle("dim", !activeCats.has(row.dataset.cat));
+  });
+}
+
+// ---------- lens bar ----------
+function buildLensBar(){
+  const lenses = [
+    {key:"category", label:"Category"},
+    {key:"maintenance", label:"Engineering"},
+    {key:"traction", label:"Product"},
+  ];
+  const el = document.getElementById("lensBar");
+  el.innerHTML = lenses.map(l=>`<div class="pill-btn" data-lens="${l.key}">${l.label}</div>`).join("");
+  el.querySelectorAll(".pill-btn").forEach(btn=>{
+    btn.addEventListener("click", ()=>{
+      lens = btn.dataset.lens;
+      localStorage.setItem("moag_lens", lens);
+      syncLensStyles();
+    });
+  });
+  syncLensStyles();
+}
+function syncLensStyles(){
+  document.querySelectorAll("#lensBar .pill-btn").forEach(btn=>{
+    btn.classList.toggle("active", btn.dataset.lens===lens);
+  });
+}
+
+// ---------- onboarding ----------
+const TOUR = [
+  {title:"Welcome to Map of Agents", body:"Every dot is a real AI-agent project on GitHub, pulled live. Lines connect projects that share topics or an owning org — this is a map of the ecosystem's actual structure, not a category grid."},
+  {title:"Zoom, pan, explore", body:"Scroll or pinch to zoom in — labels appear as you get closer. Drag to pan around. Click any project for full details and its strongest connections."},
+  {title:"Two lenses", body:"Switch the bottom-right control to Engineering (maintenance health: active/stale/archived) or Product (traction — stars gained per day) to see the ecosystem through a different lens."},
+  {title:"Filter by category", body:"Click a category in the bottom-left legend to isolate it; click again to restore. Use search (press /) to jump straight to a project by name."},
+];
+let tourStep = 0;
+function startTour(){
+  tourStep = 0;
+  document.getElementById("onboard").classList.add("show");
+  renderTourStep();
+}
+function renderTourStep(){
+  const s = TOUR[tourStep];
+  const dots = TOUR.map((_,i)=>`<span class="dot ${i===tourStep?'on':''}"></span>`).join("");
+  document.getElementById("onboardCard").innerHTML = `
+    <h3>${s.title}</h3>
+    <p>${s.body}</p>
+    <div class="dots">${dots}</div>
+    <div class="row">
+      <span class="skip" id="tourSkip">Skip</span>
+      <span class="next" id="tourNext">${tourStep===TOUR.length-1?"Start exploring":"Next"}</span>
+    </div>
+  `;
+  document.getElementById("tourSkip").addEventListener("click", endTour);
+  document.getElementById("tourNext").addEventListener("click", ()=>{
+    tourStep++;
+    if (tourStep>=TOUR.length) endTour(); else renderTourStep();
+  });
+}
+function endTour(){
+  document.getElementById("onboard").classList.remove("show");
+  localStorage.setItem("moag_onboarded","1");
+}
+
+})();
+</script>
+</body>
+</html>
